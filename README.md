@@ -1,6 +1,6 @@
 # @errand-ai/paperclip-adapter
 
-A [Paperclip](https://paperclip.dev) adapter that delegates agent task execution to [errand](https://github.com/errand-ai/errand) — a containerised task execution engine with MCP tool access, multi-model support, and configurable task profiles.
+A [Paperclip](https://paperclip.ing) adapter that delegates agent task execution to [Errand AI](https://errand.sh) — a containerised task execution engine with MCP tool access, multi-model support, and configurable task profiles.
 
 ## How it works
 
