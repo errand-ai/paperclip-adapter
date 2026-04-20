@@ -140,6 +140,10 @@ async function execute(
   const client = getClient(config.url, config.apiKey);
   const prompt = buildPrompt(ctx);
 
+  // Debug: log context keys and prompt to onLog so we can see what Paperclip sends
+  await ctx.onLog("stderr", `[errand-adapter] context keys: ${JSON.stringify(Object.keys(ctx.context as Record<string, unknown>))}\n`);
+  await ctx.onLog("stderr", `[errand-adapter] prompt length: ${prompt.length}, starts with: ${JSON.stringify(prompt.slice(0, 200))}\n`);
+
   let taskId: string;
   try {
     taskId = await client.newTask(prompt, config.model);
@@ -168,14 +172,16 @@ async function execute(
         continue; // transient failure, keep polling
       }
 
+      await ctx.onLog("stderr", `[errand-adapter] task ${taskId} status: ${status.status}\n`);
       if (!TERMINAL_STATES.has(status.status)) continue;
 
       if (status.status === "completed") {
         let output = "";
         try {
           output = await client.taskOutput(taskId);
-        } catch {
-          // output retrieval failed
+          await ctx.onLog("stderr", `[errand-adapter] task output length: ${output.length}\n`);
+        } catch (err) {
+          await ctx.onLog("stderr", `[errand-adapter] task output retrieval failed: ${err instanceof Error ? err.message : String(err)}\n`);
         }
         return {
           exitCode: 0,
