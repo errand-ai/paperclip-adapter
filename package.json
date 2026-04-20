@@ -1,6 +1,6 @@
 {
   "name": "@errand-ai/paperclip-adapter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Paperclip adapter for errand task execution engine",
   "exports": {
@@ -21,11 +21,15 @@
     "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest"
   },
   "dependencies": {
-    "@paperclipai/adapter-utils": "^2026.416.0"
+    "@paperclipai/adapter-utils": "^2026.416.0",
+    "@paperclipai/plugin-sdk": "^2026.416.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "paperclipPlugin": {
+    "manifest": "./dist/manifest.js"
   },
   "publishConfig": {
     "access": "public",
