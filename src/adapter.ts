@@ -7,6 +7,7 @@ import type {
   AdapterModel,
   AdapterConfigSchema,
 } from "@paperclipai/adapter-utils";
+import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { ErrandClient } from "./errand-client.js";
 
 const TERMINAL_STATES = new Set(["completed", "review", "deleted", "failed"]);
@@ -34,8 +35,8 @@ function extractConfig(ctx: AdapterExecutionContext): AdapterConfig {
 }
 
 function buildPrompt(ctx: AdapterExecutionContext): string {
-  const context = ctx.context as Record<string, unknown>;
-  return (context.prompt as string) ?? "";
+  const wakePrompt = renderPaperclipWakePrompt(ctx.context);
+  return wakePrompt || "Begin your work cycle.";
 }
 
 async function streamLogs(
