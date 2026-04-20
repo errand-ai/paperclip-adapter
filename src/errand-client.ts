@@ -31,10 +31,14 @@ interface JsonRpcResponse {
 export class ErrandClient {
   private nextId = 1;
 
+  private readonly url: string;
+
   constructor(
-    private readonly url: string,
+    url: string,
     private readonly apiKey: string,
-  ) {}
+  ) {
+    this.url = url.replace(/\/+$/, "");
+  }
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const request: JsonRpcRequest = {
@@ -44,7 +48,7 @@ export class ErrandClient {
       params: { name, arguments: args },
     };
 
-    const response = await fetch(`${this.url}/mcp`, {
+    const response = await fetch(`${this.url}/mcp/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

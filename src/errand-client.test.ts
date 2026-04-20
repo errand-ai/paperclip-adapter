@@ -35,7 +35,7 @@ describe("ErrandClient", () => {
       expect(fetchSpy).toHaveBeenCalledOnce();
 
       const [url, options] = fetchSpy.mock.calls[0];
-      expect(url).toBe("https://errand.test/mcp");
+      expect(url).toBe("https://errand.test/mcp/");
       expect(options?.method).toBe("POST");
       expect(options?.headers).toEqual(
         expect.objectContaining({
