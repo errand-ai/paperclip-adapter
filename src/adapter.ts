@@ -333,6 +333,7 @@ export function createServerAdapter(): ServerAdapterModule {
     testEnvironment: (ctx: AdapterEnvironmentTestContext) => testEnvironment(ctx, getClient),
     agentConfigurationDoc,
     getConfigSchema,
+    supportsLocalAgentJwt: true,
 
     async listModels(): Promise<AdapterModel[]> {
       if (!cachedClient) return [];
