@@ -299,7 +299,7 @@ function getConfigSchema(): AdapterConfigSchema {
   };
 }
 
-const agentConfigurationDoc = `## Errand Adapter Configuration
+export const agentConfigurationDoc = `## Errand Adapter Configuration
 
 | Field | Description |
 |-------|-------------|
