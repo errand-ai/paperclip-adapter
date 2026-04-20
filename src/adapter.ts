@@ -35,7 +35,8 @@ function extractConfig(ctx: AdapterExecutionContext): AdapterConfig {
 }
 
 function buildPrompt(ctx: AdapterExecutionContext): string {
-  const wakePrompt = renderPaperclipWakePrompt(ctx.context);
+  const context = ctx.context as Record<string, unknown>;
+  const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake);
   return wakePrompt || "Begin your work cycle.";
 }
 
