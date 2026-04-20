@@ -54,18 +54,54 @@ async function streamLogs(
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
+    let eventData: string[] = [];
+
+    const flushEvent = async (): Promise<void> => {
+      if (eventData.length === 0) return;
+      await onLog("stderr", eventData.join("\n") + "\n");
+      eventData = [];
+    };
 
     while (!signal.aborted) {
       const { done, value } = await reader.read();
       if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      const lines = text.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          await onLog("stderr", line.slice(6) + "\n");
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let lineStart = 0;
+      while (true) {
+        const lineEnd = buffer.indexOf("\n", lineStart);
+        if (lineEnd === -1) {
+          buffer = buffer.slice(lineStart);
+          break;
+        }
+
+        let line = buffer.slice(lineStart, lineEnd);
+        if (line.endsWith("\r")) {
+          line = line.slice(0, -1);
+        }
+        lineStart = lineEnd + 1;
+
+        if (line === "") {
+          await flushEvent();
+          continue;
+        }
+
+        if (line.startsWith(":")) continue;
+
+        if (line.startsWith("data:")) {
+          eventData.push(line.startsWith("data: ") ? line.slice(6) : line.slice(5));
         }
       }
     }
+
+    // Flush any remaining buffered data
+    buffer += decoder.decode();
+    if (buffer.length > 0 && !buffer.startsWith(":") && buffer.startsWith("data:")) {
+      eventData.push(buffer.startsWith("data: ") ? buffer.slice(6) : buffer.slice(5));
+    }
+    await flushEvent();
   } catch {
     // SSE connection failed — degraded but functional
   }
@@ -80,6 +116,25 @@ async function execute(
   getClient: (url: string, apiKey: string) => ErrandClient,
 ): Promise<AdapterExecutionResult> {
   const config = extractConfig(ctx);
+
+  if (!config.url) {
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorMessage: "Errand URL is not configured",
+    };
+  }
+
+  if (!config.apiKey) {
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorMessage: "API key is not configured",
+    };
+  }
+
   const client = getClient(config.url, config.apiKey);
   const prompt = buildPrompt(ctx);
 

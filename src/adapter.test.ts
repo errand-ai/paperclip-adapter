@@ -184,6 +184,28 @@ describe("Adapter Module", () => {
       expect(result.exitCode).toBe(1);
       expect(result.errorMessage).toContain("Failed to create task");
     });
+
+    it("returns error when URL is missing", async () => {
+      const adapter = createServerAdapter();
+      const ctx = makeExecutionContext({
+        config: { adapterSchemaValues: { url: "", apiKey: "key" } },
+      });
+      const result = await adapter.execute(ctx);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.errorMessage).toBe("Errand URL is not configured");
+    });
+
+    it("returns error when API key is missing", async () => {
+      const adapter = createServerAdapter();
+      const ctx = makeExecutionContext({
+        config: { adapterSchemaValues: { url: "https://errand.test", apiKey: "" } },
+      });
+      const result = await adapter.execute(ctx);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.errorMessage).toBe("API key is not configured");
+    });
   });
 
   describe("testEnvironment", () => {
