@@ -1,7 +1,10 @@
-import { definePlugin } from "@paperclipai/plugin-sdk";
+import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 
-export default definePlugin({
+const plugin = definePlugin({
   async setup(ctx) {
     ctx.logger.info("Errand adapter plugin started");
   },
 });
+
+export default plugin;
+runWorker(plugin, import.meta.url);
