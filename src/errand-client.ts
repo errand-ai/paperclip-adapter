@@ -52,6 +52,7 @@ export class ErrandClient {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(request),
