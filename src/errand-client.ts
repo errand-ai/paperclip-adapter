@@ -58,11 +58,33 @@ export class ErrandClient {
       body: JSON.stringify(request),
     });
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 202) {
       throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
     }
 
-    const json = (await response.json()) as JsonRpcResponse;
+    const contentType = response.headers.get("content-type") ?? "";
+
+    let json: JsonRpcResponse;
+
+    if (contentType.includes("text/event-stream")) {
+      // MCP Streamable HTTP: server returns SSE stream with JSON-RPC messages
+      const body = await response.text();
+      const lines = body.split("\n");
+      let lastData = "";
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          lastData = line.slice(6);
+        } else if (line.startsWith("data:")) {
+          lastData = line.slice(5);
+        }
+      }
+      if (!lastData) {
+        throw new Error("MCP SSE response contained no data");
+      }
+      json = JSON.parse(lastData) as JsonRpcResponse;
+    } else {
+      json = (await response.json()) as JsonRpcResponse;
+    }
 
     if (json.error) {
       throw new Error(`MCP error: ${json.error.message}`);
