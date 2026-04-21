@@ -56,3 +56,17 @@
 - [x] 6.1 Update `ErrandClient.newTask()` to accept optional `title` parameter, passed to errand's `new_task` tool to bypass task summarisation
 - [x] 6.2 Update `execute()` to pass `title` as `{agent.name}-{runId}` for traceability back to Paperclip
 - [x] 6.3 Call `ctx.onMeta()` with `AdapterInvocationMeta` before task creation — reports adapter type, MCP endpoint, profile, prompt, and context for Paperclip's "Invocation" section in run logs
+
+## 7. Skills Sync & Credential Injection (depends on errand-side MCP changes)
+
+- [ ] 7.1 Update `ErrandClient.newTask()` to accept optional `env` parameter — passes `PAPERCLIP_API_KEY`, `PAPERCLIP_API_URL`, `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_RUN_ID` to errand's `new_task` tool for injection into the task-runner container
+- [ ] 7.2 Implement `ErrandClient.listSkills()` — calls errand's `list_skills` MCP tool, returns JSON array of `{ name, description }` per skill
+- [ ] 7.3 Implement `ErrandClient.upsertSkill(name, description, instructions, files?)` — calls errand's `upsert_skill` MCP tool (create-or-update by name; accepts `name`, `description`, `instructions`, optional `files` array of `{ path, content }`)
+- [ ] 7.4 Implement `ErrandClient.deleteSkill(name)` — calls errand's `delete_skill` MCP tool (delete by name, errors if not found)
+- [ ] 7.5 Implement `listSkills(ctx)` on the adapter module — calls `ErrandClient.listSkills()`, maps errand skills to `AdapterSkillSnapshot` with `AdapterSkillEntry` objects, cross-references with Paperclip's `config.paperclipRuntimeSkills` to determine desired/managed/state
+- [ ] 7.6 Implement `syncSkills(ctx, desiredSkills)` on the adapter module — diffs desired Paperclip skills against errand's current skills, calls `upsertSkill` for new/updated skills and `deleteSkill` for removed skills, returns updated `AdapterSkillSnapshot`
+- [ ] 7.7 Update `execute()` to pass Paperclip credentials via `env` parameter on `newTask()` — inject `authToken` as `PAPERCLIP_API_KEY`, derive `PAPERCLIP_API_URL` from Paperclip server config, include `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_RUN_ID` from execution context
+- [ ] 7.8 Test `ErrandClient` skill CRUD methods (listSkills, upsertSkill, deleteSkill)
+- [ ] 7.9 Test `listSkills()` maps errand skills to AdapterSkillSnapshot
+- [ ] 7.10 Test `syncSkills()` diffs and syncs skills correctly
+- [ ] 7.11 Test `execute()` passes Paperclip env vars via `env` parameter

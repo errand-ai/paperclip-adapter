@@ -103,6 +103,18 @@ The adapter SHALL report invocation metadata to Paperclip for the run log "Invoc
   - `prompt`: the full rendered prompt sent to errand
   - `context`: the Paperclip execution context
 
+### Requirement: Credential injection via task environment
+The adapter SHALL pass Paperclip runtime credentials to errand's task-runner container via the `env` parameter on `new_task`.
+
+#### Scenario: Paperclip credentials injected
+- **WHEN** `execute()` creates a new errand task
+- **THEN** the adapter SHALL pass the following environment variables via the `env` parameter:
+  - `PAPERCLIP_API_KEY`: the `authToken` from the execution context (per-run JWT)
+  - `PAPERCLIP_API_URL`: derived from Paperclip server configuration
+  - `PAPERCLIP_AGENT_ID`: `ctx.agent.id`
+  - `PAPERCLIP_COMPANY_ID`: `ctx.agent.companyId`
+  - `PAPERCLIP_RUN_ID`: `ctx.runId`
+
 ### Requirement: MCP communication via Streamable HTTP
 The adapter SHALL communicate with errand's MCP endpoint using the MCP Streamable HTTP transport.
 

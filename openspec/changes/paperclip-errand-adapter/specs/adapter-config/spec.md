@@ -51,3 +51,18 @@ The adapter package SHALL export a `createServerAdapter()` function and provide 
 - **THEN** the root export (`.`) SHALL export `createServerAdapter()` returning a `ServerAdapterModule` with `type: "errand"`, plus metadata exports `type`, `label`, and `agentConfigurationDoc`
 - **THEN** the `./server` export SHALL provide the instantiated adapter module (execute, testEnvironment, etc.)
 - **THEN** the `./ui-parser` export SHALL provide a `parseStdoutLine` function for transcript rendering
+
+### Requirement: Skills sync via errand MCP tools
+The adapter SHALL implement `listSkills()` and `syncSkills()` to manage Paperclip skills in errand's skill store.
+
+#### Scenario: Skills listed
+- **WHEN** `listSkills()` is called
+- **THEN** the adapter SHALL call errand's `list_skills` MCP tool
+- **THEN** the adapter SHALL map errand skills to `AdapterSkillSnapshot` with entries cross-referenced against Paperclip's desired skills
+
+#### Scenario: Skills synced
+- **WHEN** `syncSkills()` is called with a desired skill list
+- **THEN** the adapter SHALL diff desired Paperclip skills against errand's current skills
+- **THEN** the adapter SHALL call `upsert_skill` for new or updated skills (create-or-update by name; passing `name`, `description`, `instructions`, and optional `files` array of `{ path, content }`)
+- **THEN** the adapter SHALL call `delete_skill` for skills no longer desired
+- **THEN** the adapter SHALL return an updated `AdapterSkillSnapshot`
