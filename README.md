@@ -54,4 +54,4 @@ npm run build   # compile to dist/
 
 ## License
 
-MIT
+Apache-2.0

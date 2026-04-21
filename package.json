@@ -48,5 +48,5 @@
     "type": "git",
     "url": "https://github.com/errand-ai/paperclip-adapter.git"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }
