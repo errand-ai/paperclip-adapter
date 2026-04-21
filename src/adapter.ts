@@ -212,6 +212,17 @@ async function execute(
   const client = getClient(config.url, config.apiKey);
   const prompt = await buildPrompt(ctx, ctx.onLog);
 
+  // Report invocation metadata for the Paperclip run log
+  if (ctx.onMeta) {
+    await ctx.onMeta({
+      adapterType: "errand",
+      command: `${config.url}/mcp/`,
+      commandArgs: ["new_task", ...(config.model ? [`profile=${config.model}`] : [])],
+      prompt,
+      context: ctx.context as Record<string, unknown>,
+    });
+  }
+
   let taskId: string;
   try {
     const taskTitle = `${ctx.agent.name}-${ctx.runId}`;
