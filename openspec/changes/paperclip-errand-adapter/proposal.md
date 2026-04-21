@@ -5,24 +5,28 @@ Paperclip is an agent workforce orchestrator that delegates tasks to adapter-bac
 ## What Changes
 
 - Create the `@errand-ai/paperclip-adapter` npm package implementing Paperclip's `ServerAdapterModule` interface
-- Implement `execute()` — creates an errand task via MCP, polls for completion, streams logs via SSE, returns structured result
+- Implement `execute()` — creates an errand task via MCP, polls for completion, streams execution events for transcript rendering, returns structured result
 - Implement `testEnvironment()` — validates connectivity and authentication against the errand instance
 - Implement `listModels()` — fetches errand task profiles and maps them as selectable "models"
-- Implement `getConfigSchema()` — returns declarative form fields (URL, API key, profile, timeout) for Paperclip's auto-rendered config UI
-- Create GitHub Actions CI pipeline to test, build, and publish the package to npmjs.com on tagged releases
+- Implement `getConfigSchema()` — returns declarative form fields (URL, API key, timeout) for Paperclip's auto-rendered config UI
+- Support instructions bundle (AGENT.md, SOUL.md, HEARTBEAT.md) and prompt template for prompt construction
+- Provide `./ui-parser` export for transcript rendering — maps errand execution events to Paperclip TranscriptEntry types
+- Provide `./server` export with instantiated adapter module
+- Create GitHub Actions CI pipeline to test, build, and publish via OIDC trusted publishers
 
 ## Capabilities
 
 ### New Capabilities
-- `adapter-execute`: Execute Paperclip tasks via errand's task API with log streaming and result retrieval
-- `adapter-config`: Declarative configuration schema and environment testing for the Paperclip UI
-- `ci-pipeline`: GitHub Actions workflow for testing, building, and publishing to npmjs.com
+- `adapter-execute`: Execute Paperclip tasks via errand's task API with transcript event streaming and result retrieval
+- `adapter-config`: Declarative configuration schema, environment testing, instructions bundle support, and adapter capabilities for Paperclip UI integration
+- `transcript-rendering`: UI parser mapping errand task-runner events to Paperclip transcript entries (system messages, tool calls, thinking, assistant output)
+- `ci-pipeline`: GitHub Actions workflow for testing, building, and publishing to npmjs.com via OIDC trusted publishers
 
 ### Modified Capabilities
 
 ## Impact
 
 - New npm package: `@errand-ai/paperclip-adapter`
-- Dependency on `@paperclipai/adapter-utils` for type definitions and utilities
+- Dependencies on `@paperclipai/adapter-utils` and `@paperclipai/plugin-sdk`
 - Requires a running errand instance with MCP API key access
-- Corresponding errand-side API enhancements tracked in a separate change (`paperclip-integration-api`)
+- Installed via Paperclip's adapter plugin system (API/UI), not `paperclipai plugin install`

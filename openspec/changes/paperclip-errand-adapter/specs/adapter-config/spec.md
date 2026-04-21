@@ -34,9 +34,20 @@ The adapter SHALL implement `testEnvironment()` to validate connectivity and aut
 - **WHEN** `testEnvironment()` is called with invalid URL or API key
 - **THEN** the adapter SHALL return a failing `AdapterEnvironmentTestResult` with a descriptive error message
 
-### Requirement: Module export
-The adapter package SHALL export a `createServerAdapter()` function as required by Paperclip's plugin loader.
+### Requirement: Adapter capabilities for UI integration
+The adapter SHALL declare capabilities required for Paperclip's UI to render configuration and instructions editors.
 
-#### Scenario: Module loaded by Paperclip
-- **WHEN** Paperclip's plugin loader imports the package
-- **THEN** the package SHALL export `createServerAdapter()` returning a `ServerAdapterModule` with `type: "errand"`
+#### Scenario: Config section visibility
+- **WHEN** the adapter module is loaded by Paperclip
+- **THEN** `supportsLocalAgentJwt` SHALL be `true` (required for UI to show the Permissions & Configuration section)
+- **THEN** `supportsInstructionsBundle` SHALL be `true` (enables AGENT.md, SOUL.md, HEARTBEAT.md editors)
+- **THEN** `instructionsPathKey` SHALL be `"instructionsFilePath"` (tells Paperclip which config key stores the instructions file path)
+
+### Requirement: Module and subpath exports
+The adapter package SHALL export a `createServerAdapter()` function and provide standard subpath exports.
+
+#### Scenario: Module loaded by Paperclip's adapter plugin store
+- **WHEN** Paperclip's adapter plugin loader imports the package
+- **THEN** the root export (`.`) SHALL export `createServerAdapter()` returning a `ServerAdapterModule` with `type: "errand"`, plus metadata exports `type`, `label`, and `agentConfigurationDoc`
+- **THEN** the `./server` export SHALL provide the instantiated adapter module (execute, testEnvironment, etc.)
+- **THEN** the `./ui-parser` export SHALL provide a `parseStdoutLine` function for transcript rendering

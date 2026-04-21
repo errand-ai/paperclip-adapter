@@ -13,6 +13,28 @@ The adapter SHALL create errand tasks by calling the `new_task` MCP tool with th
 - **WHEN** the `new_task` MCP call fails or returns an error
 - **THEN** the adapter SHALL return an `AdapterExecutionResult` with a non-zero `exitCode` and the error in `errorMessage`
 
+#### Scenario: Missing configuration
+- **WHEN** `execute()` is called with empty `url` or `apiKey`
+- **THEN** the adapter SHALL return an `AdapterExecutionResult` with `exitCode: 1` and a clear error message without attempting to connect
+
+### Requirement: Prompt construction
+The adapter SHALL build the task prompt from three sources, matching built-in adapter behaviour.
+
+#### Scenario: Full prompt with all sources
+- **WHEN** `execute()` is called with an instructions file, prompt template, and wake payload
+- **THEN** the adapter SHALL read the instructions file from `config.instructionsFilePath`
+- **THEN** the adapter SHALL render the prompt template from `config.promptTemplate` with `{{agent.id}}` and `{{agent.name}}` substitution
+- **THEN** the adapter SHALL render the wake payload from `context.paperclipWake` using `renderPaperclipWakePrompt()`
+- **THEN** the adapter SHALL concatenate all three sections as the task description
+
+#### Scenario: Default prompt template
+- **WHEN** `config.promptTemplate` is not set
+- **THEN** the adapter SHALL use `"You are agent {{agent.id}} ({{agent.name}}). Continue your Paperclip work."` as the default
+
+#### Scenario: No wake payload
+- **WHEN** `context.paperclipWake` is absent (heartbeat without issue context)
+- **THEN** the adapter SHALL use only the instructions and prompt template
+
 ### Requirement: Task status polling
 The adapter SHALL poll errand's `task_status` MCP tool until the task reaches a terminal state.
 
@@ -68,10 +90,12 @@ The adapter package SHALL export a `./ui-parser` module that Paperclip's plugin-
   - `error` → `stderr` (error message)
   - `raw` / unknown → `stdout` (plain text fallback)
 
-### Requirement: MCP communication via direct HTTP
-The adapter SHALL communicate with errand's MCP endpoint using direct JSON-RPC HTTP POST requests.
+### Requirement: MCP communication via Streamable HTTP
+The adapter SHALL communicate with errand's MCP endpoint using the MCP Streamable HTTP transport.
 
 #### Scenario: MCP tool invocation
 - **WHEN** the adapter needs to call an MCP tool
-- **THEN** the adapter SHALL POST a JSON-RPC request to `{errandUrl}/mcp` with the `Authorization: Bearer {apiKey}` header
-- **THEN** the adapter SHALL parse the JSON-RPC response to extract the tool result
+- **THEN** the adapter SHALL POST a JSON-RPC request to `{errandUrl}/mcp/` (trailing slash required)
+- **THEN** the adapter SHALL include `Authorization: Bearer {apiKey}` and `Accept: application/json, text/event-stream` headers
+- **THEN** the adapter SHALL handle both JSON responses (200 OK) and SSE responses (202 Accepted)
+- **THEN** for SSE responses, the adapter SHALL parse `data:` lines to extract the JSON-RPC response
