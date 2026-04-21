@@ -82,13 +82,19 @@ The adapter polls `task_status` on an interval (default 3s) while simultaneously
 
 **Rationale:** SSE alone can't reliably detect task completion. Polling alone misses real-time events. Both together give reliability + liveness.
 
-### 9. Publish via OIDC trusted publishers
+### 9. Skills sync reads from disk, uses saved preferences
+
+Paperclip's `paperclipRuntimeSkills` config entries provide a `source` filesystem path to each skill directory (containing `SKILL.md` + optional reference files). The adapter reads skill content from disk during `syncSkills()` and sends it to errand via `upsert_skill`. The `listSkills()` method uses `resolvePaperclipDesiredSkillNames()` from adapter-utils to determine which skills are desired (saved in `config.paperclipSkillSync.desiredSkills`), ensuring the UI reflects the user's saved preferences.
+
+**Rationale:** Paperclip skills are directory-based, not inline content. The runtime skill entry only has a `source` path — the adapter must read the files. Desired state must come from the persisted config, not be hardcoded, otherwise the UI always shows all skills as ticked.
+
+### 10. Publish via OIDC trusted publishers
 
 GitHub Actions CI uses OIDC trusted publishers for npm authentication — no `NPM_TOKEN` secret needed. Requires Node 24 (ships with npm >= 11.5.1), `--provenance` flag, `id-token: write` permission, and `repository.url` in package.json matching the configured trusted publisher.
 
 **Rationale:** More secure than long-lived tokens. The npm org configures the GitHub repo as a trusted publisher.
 
-### 10. Adapter plugin system (not plugin SDK)
+### 11. Adapter plugin system (not plugin SDK)
 
 The adapter is installed via Paperclip's adapter plugin system (`POST /api/adapters/install` or the UI), which stores records in `~/.paperclip/adapter-plugins.json` and loads packages that export `createServerAdapter()`. This is separate from the plugin SDK system (`paperclipai plugin install`) which uses manifests, workers, and `definePlugin()`.
 
