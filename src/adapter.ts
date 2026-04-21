@@ -594,6 +594,12 @@ async function syncSkills(
   const desiredSet = new Set(desiredSkills);
   const warnings: string[] = [];
 
+  // Debug: log what we're working with
+  console.log(`[errand-adapter] syncSkills: ${paperclipSkills.length} available, ${desiredSkills.length} desired: [${desiredSkills.join(", ")}]`);
+  for (const ps of paperclipSkills) {
+    console.log(`[errand-adapter]   skill: key=${ps.key} runtimeName=${ps.runtimeName} source=${ps.source} desired=${desiredSet.has(ps.key)}`);
+  }
+
   try {
     const errandSkills = await client.listSkills();
     const errandSkillNames = new Set(errandSkills.map((s) => s.name));
@@ -605,9 +611,11 @@ async function syncSkills(
       try {
         const skillContent = await readSkillFromDisk(ps.source);
         if (!skillContent) {
+          console.log(`[errand-adapter]   SKIP "${ps.key}": readSkillFromDisk returned null for ${ps.source}`);
           warnings.push(`Skill "${ps.key}": could not read from ${ps.source}`);
           continue;
         }
+        console.log(`[errand-adapter]   UPSERT "${runtimeName}": instructions=${skillContent.instructions.length}chars, files=${skillContent.files.length}`);
         await client.upsertSkill(
           runtimeName,
           skillContent.description || `Paperclip skill: ${ps.key}`,
