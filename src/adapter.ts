@@ -8,6 +8,7 @@ import type {
   AdapterConfigSchema,
 } from "@paperclipai/adapter-utils";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
+import { readFile } from "node:fs/promises";
 import { ErrandClient } from "./errand-client.js";
 
 const TERMINAL_STATES = new Set(["completed", "review", "deleted", "failed"]);
@@ -34,20 +35,44 @@ function extractConfig(ctx: AdapterExecutionContext): AdapterConfig {
   };
 }
 
-function buildPrompt(ctx: AdapterExecutionContext): string {
+const DEFAULT_PROMPT_TEMPLATE =
+  "You are agent {{agent.id}} ({{agent.name}}). Continue your Paperclip work.";
+
+async function buildPrompt(
+  ctx: AdapterExecutionContext,
+  onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>,
+): Promise<string> {
   const config = ctx.config as Record<string, unknown>;
   const context = ctx.context as Record<string, unknown>;
 
-  // Build wake prompt from Paperclip wake payload (issue, comments, etc.)
-  const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake);
+  const sections: string[] = [];
 
-  // Use promptTemplate from config as base prompt (set by Paperclip UI)
-  const promptTemplate = (config.promptTemplate as string) ?? "";
+  // 1. Read instructions file (AGENT.md bundle managed by Paperclip)
+  const instructionsFilePath = ((config.instructionsFilePath as string) ?? "").trim();
+  if (instructionsFilePath) {
+    try {
+      const instructions = await readFile(instructionsFilePath, "utf-8");
+      if (instructions.trim()) {
+        sections.push(`--- Agent Instructions ---\n${instructions.trim()}`);
+      }
+    } catch (err) {
+      await onLog("stderr", `[errand-adapter] Warning: could not read instructions file "${instructionsFilePath}": ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+
+  // 2. Render prompt template (default provided if not configured)
+  const promptTemplate = ((config.promptTemplate as string) ?? "").trim() || DEFAULT_PROMPT_TEMPLATE;
   const renderedTemplate = promptTemplate
     .replace(/\{\{agent\.id\}\}/g, ctx.agent.id)
     .replace(/\{\{agent\.name\}\}/g, ctx.agent.name);
+  sections.push(renderedTemplate);
 
-  const sections = [renderedTemplate, wakePrompt].filter(Boolean);
+  // 3. Append wake prompt from Paperclip wake payload (issue, comments, etc.)
+  const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake);
+  if (wakePrompt) {
+    sections.push(wakePrompt);
+  }
+
   return sections.join("\n\n") || "Begin your work cycle.";
 }
 
@@ -149,7 +174,7 @@ async function execute(
   }
 
   const client = getClient(config.url, config.apiKey);
-  const prompt = buildPrompt(ctx);
+  const prompt = await buildPrompt(ctx, ctx.onLog);
 
   // Debug: log context keys and prompt to onLog so we can see what Paperclip sends
   await ctx.onLog("stderr", `[errand-adapter] context keys: ${JSON.stringify(Object.keys(ctx.context as Record<string, unknown>))}\n`);
@@ -354,6 +379,7 @@ export function createServerAdapter(): ServerAdapterModule {
     getConfigSchema,
     supportsLocalAgentJwt: true,
     supportsInstructionsBundle: true,
+    instructionsPathKey: "instructionsFilePath",
 
     async listModels(): Promise<AdapterModel[]> {
       if (!cachedClient) return [];
