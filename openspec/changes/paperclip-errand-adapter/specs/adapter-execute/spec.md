@@ -104,11 +104,11 @@ The adapter SHALL report invocation metadata to Paperclip for the run log "Invoc
   - `context`: the Paperclip execution context
 
 ### Requirement: Credential injection via task environment
-The adapter SHALL pass Paperclip runtime credentials to errand's task-runner container via the `env` parameter on `new_task`.
+The adapter SHALL pass Paperclip runtime credentials to errand's task-runner container via the `env` parameter on `new_task`. If errand does not yet support the `env` parameter, the adapter SHALL fall back to creating the task without it.
 
 #### Scenario: Paperclip credentials injected
 - **WHEN** `execute()` creates a new errand task
-- **THEN** the adapter SHALL pass the following environment variables via the `env` parameter:
+- **THEN** the adapter SHALL attempt to pass the following environment variables via the `env` parameter:
   - `PAPERCLIP_API_KEY`: the `authToken` from the execution context (per-run JWT)
   - `PAPERCLIP_API_URL`: derived from Paperclip server configuration
   - `PAPERCLIP_AGENT_ID`: `ctx.agent.id`
@@ -121,6 +121,6 @@ The adapter SHALL communicate with errand's MCP endpoint using the MCP Streamabl
 #### Scenario: MCP tool invocation
 - **WHEN** the adapter needs to call an MCP tool
 - **THEN** the adapter SHALL POST a JSON-RPC request to `{errandUrl}/mcp/` (trailing slash required)
-- **THEN** the adapter SHALL include `Authorization: Bearer {apiKey}` and `Accept: application/json, text/event-stream` headers
+- **THEN** the adapter SHALL include `Authorization: Bearer {apiKey}`, `Accept: application/json, text/event-stream`, and `X-Client-Id: paperclip` headers
 - **THEN** the adapter SHALL handle both JSON responses (200 OK) and SSE responses (202 Accepted)
 - **THEN** for SSE responses, the adapter SHALL parse `data:` lines to extract the JSON-RPC response

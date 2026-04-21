@@ -63,6 +63,8 @@ The adapter SHALL implement `listSkills()` and `syncSkills()` to manage Papercli
 #### Scenario: Skills synced
 - **WHEN** `syncSkills()` is called with a desired skill list
 - **THEN** the adapter SHALL diff desired Paperclip skills against errand's current skills
-- **THEN** the adapter SHALL call `upsert_skill` for new or updated skills (create-or-update by name; passing `name`, `description`, `instructions`, and optional `files` array of `{ path, content }`)
+- **THEN** the adapter SHALL read each skill's `SKILL.md` and reference files from the `source` directory path provided by Paperclip's runtime skill entries
+- **THEN** the adapter SHALL parse SKILL.md frontmatter for `description` and body for `instructions`
+- **THEN** the adapter SHALL call `upsert_skill` for new or updated skills (create-or-update by name; passing `name`, `description`, `instructions`, and optional `files` array of `{ path, content }` for reference files)
 - **THEN** the adapter SHALL call `delete_skill` for skills no longer desired
 - **THEN** the adapter SHALL return an updated `AdapterSkillSnapshot`

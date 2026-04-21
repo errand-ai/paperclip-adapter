@@ -36,7 +36,7 @@ MCP tools (`new_task`, `task_status`, `task_output`, `task_logs`) handle the cor
 
 ### 2. MCP Streamable HTTP via direct HTTP POST (not MCP SDK)
 
-The adapter calls errand's MCP endpoint (`POST /mcp/`) with JSON-RPC payloads directly. The endpoint requires a trailing slash, an `Accept: application/json, text/event-stream` header, and can return either JSON (200) or SSE (202 Accepted).
+The adapter calls errand's MCP endpoint (`POST /mcp/`) with JSON-RPC payloads directly. The endpoint requires a trailing slash, `Accept: application/json, text/event-stream` and `X-Client-Id: paperclip` headers, and can return either JSON (200) or SSE (202 Accepted).
 
 **Rationale:** The MCP SDK adds a heavyweight dependency for what amounts to a few simple tool calls. Direct HTTP POST with `fetch()` keeps the adapter dependency-light. The adapter handles both JSON and SSE response formats.
 
