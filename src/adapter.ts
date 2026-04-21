@@ -10,7 +10,7 @@ import type {
   AdapterSkillSnapshot,
   AdapterSkillEntry,
 } from "@paperclipai/adapter-utils";
-import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
+import { renderPaperclipWakePrompt, resolvePaperclipDesiredSkillNames } from "@paperclipai/adapter-utils/server-utils";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { ErrandClient } from "./errand-client.js";
@@ -531,7 +531,8 @@ async function listSkills(
 
   const client = getClient(url, apiKey);
   const paperclipSkills = (config.paperclipRuntimeSkills ?? []) as RuntimeSkillEntry[];
-  const desiredSkills = paperclipSkills.map((s) => s.key);
+  const desiredSkills = resolvePaperclipDesiredSkillNames(config, paperclipSkills);
+  const desiredSet = new Set(desiredSkills);
 
   try {
     const errandSkills = await client.listSkills();
@@ -540,13 +541,16 @@ async function listSkills(
     const entries: AdapterSkillEntry[] = paperclipSkills.map((ps) => {
       const runtimeName = ps.runtimeName ?? ps.key;
       const installed = errandSkillsByName.has(runtimeName);
+      const desired = desiredSet.has(ps.key);
       return {
         key: ps.key,
         runtimeName,
-        desired: true,
+        desired,
         managed: true,
-        state: installed ? "installed" : "missing",
-        origin: "company_managed",
+        required: ps.required,
+        requiredReason: ps.requiredReason ?? null,
+        state: installed ? "installed" : desired ? "missing" : "available",
+        origin: ps.required ? "paperclip_required" as const : "company_managed" as const,
       };
     });
 

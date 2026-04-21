@@ -324,7 +324,7 @@ describe("Adapter Module", () => {
   });
 
   describe("listSkills", () => {
-    it("maps errand skills to AdapterSkillSnapshot", async () => {
+    it("maps errand skills to AdapterSkillSnapshot with correct desired state", async () => {
       const errandSkills = [{ name: "paperclip-inbox", description: "Inbox" }];
       fetchMock.mockImplementation(async () =>
         new Response(JSON.stringify(mockJsonRpcResponse(JSON.stringify(errandSkills))), { status: 200 }),
@@ -338,6 +338,7 @@ describe("Adapter Module", () => {
         config: {
           adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
           paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", source: "/tmp/skills/inbox" }],
+          paperclipSkillSync: { desiredSkills: ["paperclip/inbox"] },
         },
       });
 
@@ -346,9 +347,31 @@ describe("Adapter Module", () => {
       expect(result.entries).toHaveLength(1);
       expect(result.entries[0].key).toBe("paperclip/inbox");
       expect(result.entries[0].state).toBe("installed");
+      expect(result.entries[0].desired).toBe(true);
     });
 
-    it("marks missing skills correctly", async () => {
+    it("marks desired but not installed skills as missing", async () => {
+      fetchMock.mockImplementation(async () =>
+        new Response(JSON.stringify(mockJsonRpcResponse("[]")), { status: 200 }),
+      );
+
+      const adapter = createServerAdapter();
+      const result = await adapter.listSkills!({
+        agentId: "agent-1",
+        companyId: "co-1",
+        adapterType: "errand",
+        config: {
+          adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
+          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", source: "/tmp/skills/inbox" }],
+          paperclipSkillSync: { desiredSkills: ["paperclip/inbox"] },
+        },
+      });
+
+      expect(result.entries[0].state).toBe("missing");
+      expect(result.entries[0].desired).toBe(true);
+    });
+
+    it("marks non-desired skills as available", async () => {
       fetchMock.mockImplementation(async () =>
         new Response(JSON.stringify(mockJsonRpcResponse("[]")), { status: 200 }),
       );
@@ -364,7 +387,8 @@ describe("Adapter Module", () => {
         },
       });
 
-      expect(result.entries[0].state).toBe("missing");
+      expect(result.entries[0].state).toBe("available");
+      expect(result.entries[0].desired).toBe(false);
     });
   });
 
