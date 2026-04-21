@@ -76,12 +76,48 @@ async function buildPrompt(
   return sections.join("\n\n") || "Begin your work cycle.";
 }
 
+function parseAndForwardEvent(
+  raw: string,
+  onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>,
+  streamedLines: Set<string>,
+): void {
+  try {
+    const parsed = JSON.parse(raw);
+    // Check for end sentinel
+    if (parsed.event === "task_log_end") return;
+
+    // Extract inner event from {"event": "task_event", "type": "...", "data": {...}}
+    if (parsed.event === "task_event" && parsed.type) {
+      const inner = JSON.stringify({ type: parsed.type, data: parsed.data });
+      if (!streamedLines.has(inner)) {
+        streamedLines.add(inner);
+        void onLog("stdout", inner + "\n");
+      }
+      return;
+    }
+
+    // If it's already in {"type": "...", "data": {...}} format (from task_logs)
+    if (parsed.type && parsed.data !== undefined) {
+      const line = JSON.stringify(parsed);
+      if (!streamedLines.has(line)) {
+        streamedLines.add(line);
+        void onLog("stdout", line + "\n");
+      }
+      return;
+    }
+  } catch {
+    // Not JSON — forward as stderr
+  }
+  void onLog("stderr", raw + "\n");
+}
+
 async function streamLogs(
   url: string,
   taskId: string,
   apiKey: string,
   onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>,
   signal: AbortSignal,
+  streamedLines: Set<string>,
 ): Promise<void> {
   try {
     const response = await fetch(
@@ -95,10 +131,11 @@ async function streamLogs(
     let buffer = "";
     let eventData: string[] = [];
 
-    const flushEvent = async (): Promise<void> => {
+    const flushEvent = (): void => {
       if (eventData.length === 0) return;
-      await onLog("stderr", eventData.join("\n") + "\n");
+      const raw = eventData.join("\n");
       eventData = [];
+      parseAndForwardEvent(raw, onLog, streamedLines);
     };
 
     while (!signal.aborted) {
@@ -122,7 +159,7 @@ async function streamLogs(
         lineStart = lineEnd + 1;
 
         if (line === "") {
-          await flushEvent();
+          flushEvent();
           continue;
         }
 
@@ -134,12 +171,11 @@ async function streamLogs(
       }
     }
 
-    // Flush any remaining buffered data
     buffer += decoder.decode();
     if (buffer.length > 0 && !buffer.startsWith(":") && buffer.startsWith("data:")) {
       eventData.push(buffer.startsWith("data: ") ? buffer.slice(6) : buffer.slice(5));
     }
-    await flushEvent();
+    flushEvent();
   } catch {
     // SSE connection failed — degraded but functional
   }
@@ -176,13 +212,10 @@ async function execute(
   const client = getClient(config.url, config.apiKey);
   const prompt = await buildPrompt(ctx, ctx.onLog);
 
-  // Debug: log context keys and prompt to onLog so we can see what Paperclip sends
-  await ctx.onLog("stderr", `[errand-adapter] context keys: ${JSON.stringify(Object.keys(ctx.context as Record<string, unknown>))}\n`);
-  await ctx.onLog("stderr", `[errand-adapter] prompt length: ${prompt.length}, starts with: ${JSON.stringify(prompt.slice(0, 200))}\n`);
-
   let taskId: string;
   try {
-    taskId = await client.newTask(prompt, config.model);
+    const taskTitle = `${ctx.agent.name}-${ctx.runId}`;
+    taskId = await client.newTask(prompt, config.model, taskTitle);
   } catch (err) {
     return {
       exitCode: 1,
@@ -192,8 +225,9 @@ async function execute(
     };
   }
 
+  const streamedLines = new Set<string>();
   const abortController = new AbortController();
-  const logPromise = streamLogs(config.url, taskId, config.apiKey, ctx.onLog, abortController.signal);
+  const logPromise = streamLogs(config.url, taskId, config.apiKey, ctx.onLog, abortController.signal, streamedLines);
 
   const deadline = Date.now() + (config.timeoutSec ?? DEFAULT_TIMEOUT_SEC) * 1000;
 
@@ -208,16 +242,29 @@ async function execute(
         continue; // transient failure, keep polling
       }
 
-      await ctx.onLog("stderr", `[errand-adapter] task ${taskId} status: ${status.status}\n`);
       if (!TERMINAL_STATES.has(status.status)) continue;
+
+      // Stop SSE stream and backfill any missed events from task_logs
+      abortController.abort();
+      await logPromise.catch(() => {});
+      try {
+        const logs = await client.taskLogs(taskId);
+        for (const line of logs.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed) {
+            parseAndForwardEvent(trimmed, ctx.onLog, streamedLines);
+          }
+        }
+      } catch {
+        // Log backfill failed — non-fatal
+      }
 
       if (status.status === "completed") {
         let output = "";
         try {
           output = await client.taskOutput(taskId);
-          await ctx.onLog("stderr", `[errand-adapter] task output length: ${output.length}\n`);
-        } catch (err) {
-          await ctx.onLog("stderr", `[errand-adapter] task output retrieval failed: ${err instanceof Error ? err.message : String(err)}\n`);
+        } catch {
+          // output retrieval failed
         }
         return {
           exitCode: 0,

@@ -42,11 +42,16 @@
 
 ## 5. Transcript Streaming & UI Parser
 
-- [ ] 5.1 Add `taskLogs(taskId)` method to `ErrandClient` — calls `task_logs` MCP tool, returns raw log text
-- [ ] 5.2 Rewrite `streamLogs()` to forward structured errand events as stdout JSON lines — parse SSE data as `{"event": "task_event", "type": "...", "data": {...}}`, forward inner object via `ctx.onLog("stdout", ...)`
-- [ ] 5.3 After task completion, fetch full logs via `taskLogs()` and forward any remaining events as stdout lines
-- [ ] 5.4 Create `src/ui-parser.ts` — self-contained `parseStdoutLine(line, ts)` mapping errand events to Paperclip `TranscriptEntry` types (agent_start→system, thinking→thinking, tool_call→tool_call, tool_result→tool_result, llm_turn_start→init, agent_end→result, error→stderr)
-- [ ] 5.5 Add `./ui-parser` export to `package.json` exports map so Paperclip's plugin-loader can serve it to the UI
-- [ ] 5.6 Remove temporary `[errand-adapter]` debug log lines from `execute()`
-- [ ] 5.7 Test `ErrandClient.taskLogs` returns log text
-- [ ] 5.8 Test `ui-parser` parseStdoutLine maps each errand event type to correct TranscriptEntry kind
+- [x] 5.1 Add `taskLogs(taskId)` method to `ErrandClient` — calls `task_logs` MCP tool, returns raw log text
+- [x] 5.2 Rewrite `streamLogs()` to forward structured errand events as stdout JSON lines — parse SSE data as `{"event": "task_event", "type": "...", "data": {...}}`, forward inner object via `ctx.onLog("stdout", ...)`
+- [x] 5.3 After task completion, fetch full logs via `taskLogs()` and forward any remaining events as stdout lines
+- [x] 5.4 Create `src/ui-parser.ts` — self-contained `parseStdoutLine(line, ts)` mapping errand events to Paperclip `TranscriptEntry` types (agent_start→system, thinking→thinking, tool_call→tool_call, tool_result→tool_result, llm_turn_start→init, agent_end→result, error→stderr)
+- [x] 5.5 Add `./ui-parser` export to `package.json` exports map so Paperclip's plugin-loader can serve it to the UI
+- [x] 5.6 Remove temporary `[errand-adapter]` debug log lines from `execute()`
+- [x] 5.7 Test `ErrandClient.taskLogs` returns log text
+- [x] 5.8 Test `ui-parser` parseStdoutLine maps each errand event type to correct TranscriptEntry kind
+
+## 6. Task Title Pass-through
+
+- [x] 6.1 Update `ErrandClient.newTask()` to accept optional `title` parameter, passed to errand's `new_task` tool to bypass task summarisation
+- [x] 6.2 Update `execute()` to pass `title` as `{agent.name}-{runId}` for traceability back to Paperclip

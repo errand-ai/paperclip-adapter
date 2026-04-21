@@ -150,6 +150,21 @@ describe("ErrandClient", () => {
     });
   });
 
+  describe("taskLogs", () => {
+    it("returns log text from task_logs tool", async () => {
+      const logs = '{"type": "agent_start", "data": {"agent": "TaskRunner"}}\n{"type": "agent_end", "data": {}}';
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(mockJsonRpcResponse(logs)), { status: 200 }),
+      );
+
+      const result = await client.taskLogs("task-1");
+      expect(result).toBe(logs);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.params.arguments).toEqual({ task_id: "task-1" });
+    });
+  });
+
   describe("listTaskProfiles", () => {
     it("returns profile array", async () => {
       const profiles = [

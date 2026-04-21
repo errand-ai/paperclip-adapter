@@ -1,6 +1,6 @@
 {
   "name": "@errand-ai/paperclip-adapter",
-  "version": "0.1.16",
+  "version": "0.2.1",
   "type": "module",
   "description": "Paperclip adapter for errand task execution engine",
   "exports": {
@@ -11,6 +11,10 @@
     "./server": {
       "import": "./dist/server/index.js",
       "types": "./dist/server/index.d.ts"
+    },
+    "./ui-parser": {
+      "import": "./dist/ui-parser.js",
+      "types": "./dist/ui-parser.d.ts"
     }
   },
   "main": "./dist/index.js",

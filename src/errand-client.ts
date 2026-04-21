@@ -99,10 +99,13 @@ export class ErrandClient {
     return textContent?.text ?? "";
   }
 
-  async newTask(description: string, profile?: string): Promise<string> {
+  async newTask(description: string, profile?: string, title?: string): Promise<string> {
     const args: Record<string, unknown> = { description };
     if (profile) {
       args.profile = profile;
+    }
+    if (title) {
+      args.title = title;
     }
     const result = await this.callTool("new_task", args);
     return result.trim();
@@ -115,6 +118,10 @@ export class ErrandClient {
 
   async taskOutput(taskId: string): Promise<string> {
     return await this.callTool("task_output", { task_id: taskId });
+  }
+
+  async taskLogs(taskId: string): Promise<string> {
+    return await this.callTool("task_logs", { task_id: taskId });
   }
 
   async listTaskProfiles(): Promise<TaskProfile[]> {

@@ -7,6 +7,7 @@ The adapter SHALL create errand tasks by calling the `new_task` MCP tool with th
 - **WHEN** `execute()` is called with a valid execution context
 - **THEN** the adapter SHALL call errand's `new_task` MCP tool with the prompt derived from the Paperclip context
 - **THEN** the adapter SHALL pass the selected profile name from `adapterConfig.model` to the `profile` parameter
+- **THEN** the adapter SHALL pass a `title` parameter in the format `{agent.name}-{runId}` to bypass errand's task summariser and provide a meaningful link back to the Paperclip run
 - **THEN** the adapter SHALL receive a task UUID from errand
 
 #### Scenario: Task creation failure
