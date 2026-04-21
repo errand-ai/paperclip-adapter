@@ -353,6 +353,7 @@ export function createServerAdapter(): ServerAdapterModule {
     agentConfigurationDoc,
     getConfigSchema,
     supportsLocalAgentJwt: true,
+    supportsInstructionsBundle: true,
 
     async listModels(): Promise<AdapterModel[]> {
       if (!cachedClient) return [];
