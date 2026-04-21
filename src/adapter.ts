@@ -216,21 +216,6 @@ async function execute(
   const client = getClient(config.url, config.apiKey);
   const prompt = await buildPrompt(ctx, ctx.onLog);
 
-  // Report invocation metadata for the Paperclip run log
-  if (ctx.onMeta) {
-    try {
-      await ctx.onMeta({
-        adapterType: "errand",
-        command: `${config.url}/mcp/`,
-        commandArgs: ["new_task", ...(config.model ? [`profile=${config.model}`] : [])],
-        prompt,
-        context: ctx.context as Record<string, unknown>,
-      });
-    } catch {
-      // Non-fatal — metadata is informational
-    }
-  }
-
   // Build environment variables for the errand task-runner container
   const taskEnv: Record<string, string> = {
     PAPERCLIP_AGENT_ID: ctx.agent.id,
@@ -242,6 +227,22 @@ async function execute(
   }
   const paperclipApiUrl = process.env.PAPERCLIP_API_URL ?? `http://localhost:3100`;
   taskEnv.PAPERCLIP_API_URL = paperclipApiUrl;
+
+  // Report invocation metadata for the Paperclip run log
+  if (ctx.onMeta) {
+    try {
+      await ctx.onMeta({
+        adapterType: "errand",
+        command: `${config.url}/mcp/`,
+        commandArgs: ["new_task", ...(config.model ? [`profile=${config.model}`] : [])],
+        commandNotes: [`env keys: ${Object.keys(taskEnv).join(", ")}`],
+        prompt,
+        context: ctx.context as Record<string, unknown>,
+      });
+    } catch {
+      // Non-fatal — metadata is informational
+    }
+  }
 
   let taskId: string;
   try {
