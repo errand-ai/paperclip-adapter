@@ -55,3 +55,4 @@
 
 - [x] 6.1 Update `ErrandClient.newTask()` to accept optional `title` parameter, passed to errand's `new_task` tool to bypass task summarisation
 - [x] 6.2 Update `execute()` to pass `title` as `{agent.name}-{runId}` for traceability back to Paperclip
+- [x] 6.3 Call `ctx.onMeta()` with `AdapterInvocationMeta` before task creation — reports adapter type, MCP endpoint, profile, prompt, and context for Paperclip's "Invocation" section in run logs

@@ -91,6 +91,18 @@ The adapter package SHALL export a `./ui-parser` module that Paperclip's plugin-
   - `error` → `stderr` (error message)
   - `raw` / unknown → `stdout` (plain text fallback)
 
+### Requirement: Invocation metadata
+The adapter SHALL report invocation metadata to Paperclip for the run log "Invocation" section.
+
+#### Scenario: Invocation recorded before task creation
+- **WHEN** `execute()` is called
+- **THEN** the adapter SHALL call `ctx.onMeta()` with an `AdapterInvocationMeta` object containing:
+  - `adapterType: "errand"`
+  - `command`: the errand MCP endpoint URL
+  - `commandArgs`: `["new_task", "profile=<selected_profile>"]`
+  - `prompt`: the full rendered prompt sent to errand
+  - `context`: the Paperclip execution context
+
 ### Requirement: MCP communication via Streamable HTTP
 The adapter SHALL communicate with errand's MCP endpoint using the MCP Streamable HTTP transport.
 
