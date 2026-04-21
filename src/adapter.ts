@@ -27,7 +27,7 @@ function extractConfig(ctx: AdapterExecutionContext): AdapterConfig {
   const config = ctx.config as Record<string, unknown>;
   const schemaValues = config.adapterSchemaValues as Record<string, unknown> | undefined;
   return {
-    url: (schemaValues?.url ?? config.url) as string,
+    url: ((schemaValues?.url ?? config.url) as string ?? "").replace(/\/+$/, ""),
     apiKey: (schemaValues?.apiKey ?? config.apiKey) as string,
     model: (config.model ?? schemaValues?.model) as string | undefined,
     timeoutSec: (schemaValues?.timeoutSec ?? config.timeoutSec ?? DEFAULT_TIMEOUT_SEC) as number,
@@ -227,7 +227,12 @@ async function execute(
 
   const streamedLines = new Set<string>();
   const abortController = new AbortController();
-  const logPromise = streamLogs(config.url, taskId, config.apiKey, ctx.onLog, abortController.signal, streamedLines);
+
+  // Start SSE log stream after a short delay — errand creates tasks in
+  // "scheduled" status and the SSE endpoint returns immediately for
+  // non-running tasks. Wait for the first poll to confirm the task is running.
+  let logPromise: Promise<void> = Promise.resolve();
+  let sseStarted = false;
 
   const deadline = Date.now() + (config.timeoutSec ?? DEFAULT_TIMEOUT_SEC) * 1000;
 
@@ -240,6 +245,12 @@ async function execute(
         status = await client.taskStatus(taskId);
       } catch {
         continue; // transient failure, keep polling
+      }
+
+      // Start SSE stream once the task is running
+      if (!sseStarted && status.status === "running") {
+        sseStarted = true;
+        logPromise = streamLogs(config.url, taskId, config.apiKey, ctx.onLog, abortController.signal, streamedLines);
       }
 
       if (!TERMINAL_STATES.has(status.status)) continue;
