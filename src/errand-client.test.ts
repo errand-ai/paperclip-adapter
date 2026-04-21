@@ -181,4 +181,67 @@ describe("ErrandClient", () => {
       expect(result).toEqual(profiles);
     });
   });
+
+  describe("listSkills", () => {
+    it("returns skill array", async () => {
+      const skills = [
+        { name: "paperclip-inbox", description: "Inbox skill" },
+        { name: "web-search", description: "Web search" },
+      ];
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(mockJsonRpcResponse(JSON.stringify(skills))), { status: 200 }),
+      );
+
+      const result = await client.listSkills();
+      expect(result).toEqual(skills);
+    });
+  });
+
+  describe("upsertSkill", () => {
+    it("calls upsert_skill with name, description, instructions, and files", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(mockJsonRpcResponse("Skill created")), { status: 200 }),
+      );
+
+      await client.upsertSkill("my-skill", "A skill", "Do things", [
+        { path: "ref.md", content: "reference" },
+      ]);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.params.arguments).toEqual({
+        name: "my-skill",
+        description: "A skill",
+        instructions: "Do things",
+        files: [{ path: "ref.md", content: "reference" }],
+      });
+    });
+
+    it("omits files when not provided", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(mockJsonRpcResponse("Skill created")), { status: 200 }),
+      );
+
+      await client.upsertSkill("my-skill", "A skill", "Do things");
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.params.arguments).toEqual({
+        name: "my-skill",
+        description: "A skill",
+        instructions: "Do things",
+      });
+    });
+  });
+
+  describe("deleteSkill", () => {
+    it("calls delete_skill with name", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify(mockJsonRpcResponse("Skill deleted")), { status: 200 }),
+      );
+
+      await client.deleteSkill("my-skill");
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      expect(body.params.arguments).toEqual({ name: "my-skill" });
+    });
+  });
 });

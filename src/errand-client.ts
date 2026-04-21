@@ -3,6 +3,16 @@ export interface TaskProfile {
   description?: string;
 }
 
+export interface ErrandSkill {
+  name: string;
+  description: string;
+}
+
+export interface SkillFile {
+  path: string;
+  content: string;
+}
+
 export interface TaskStatus {
   id: string;
   status: string;
@@ -99,13 +109,21 @@ export class ErrandClient {
     return textContent?.text ?? "";
   }
 
-  async newTask(description: string, profile?: string, title?: string): Promise<string> {
+  async newTask(
+    description: string,
+    profile?: string,
+    title?: string,
+    env?: Record<string, string>,
+  ): Promise<string> {
     const args: Record<string, unknown> = { description };
     if (profile) {
       args.profile = profile;
     }
     if (title) {
       args.title = title;
+    }
+    if (env && Object.keys(env).length > 0) {
+      args.env = env;
     }
     const result = await this.callTool("new_task", args);
     return result.trim();
@@ -127,5 +145,27 @@ export class ErrandClient {
   async listTaskProfiles(): Promise<TaskProfile[]> {
     const result = await this.callTool("list_task_profiles", {});
     return JSON.parse(result) as TaskProfile[];
+  }
+
+  async listSkills(): Promise<ErrandSkill[]> {
+    const result = await this.callTool("list_skills", {});
+    return JSON.parse(result) as ErrandSkill[];
+  }
+
+  async upsertSkill(
+    name: string,
+    description: string,
+    instructions: string,
+    files?: SkillFile[],
+  ): Promise<string> {
+    const args: Record<string, unknown> = { name, description, instructions };
+    if (files && files.length > 0) {
+      args.files = files;
+    }
+    return await this.callTool("upsert_skill", args);
+  }
+
+  async deleteSkill(name: string): Promise<string> {
+    return await this.callTool("delete_skill", { name });
   }
 }

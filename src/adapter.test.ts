@@ -319,4 +319,127 @@ describe("Adapter Module", () => {
       expect(timeoutField.default).toBe(600);
     });
   });
+
+  describe("listSkills", () => {
+    it("maps errand skills to AdapterSkillSnapshot", async () => {
+      const errandSkills = [{ name: "paperclip-inbox", description: "Inbox" }];
+      fetchMock.mockImplementation(async () =>
+        new Response(JSON.stringify(mockJsonRpcResponse(JSON.stringify(errandSkills))), { status: 200 }),
+      );
+
+      const adapter = createServerAdapter();
+      const result = await adapter.listSkills!({
+        agentId: "agent-1",
+        companyId: "co-1",
+        adapterType: "errand",
+        config: {
+          adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
+          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox" }],
+        },
+      });
+
+      expect(result.supported).toBe(true);
+      expect(result.mode).toBe("persistent");
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0].key).toBe("paperclip/inbox");
+      expect(result.entries[0].state).toBe("installed");
+    });
+
+    it("marks missing skills correctly", async () => {
+      fetchMock.mockImplementation(async () =>
+        new Response(JSON.stringify(mockJsonRpcResponse("[]")), { status: 200 }),
+      );
+
+      const adapter = createServerAdapter();
+      const result = await adapter.listSkills!({
+        agentId: "agent-1",
+        companyId: "co-1",
+        adapterType: "errand",
+        config: {
+          adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
+          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox" }],
+        },
+      });
+
+      expect(result.entries[0].state).toBe("missing");
+    });
+  });
+
+  describe("syncSkills", () => {
+    it("upserts desired skills and returns updated snapshot", async () => {
+      const calls: string[] = [];
+      fetchMock.mockImplementation(async (_url: string, opts: { body: string }) => {
+        const body = JSON.parse(opts.body);
+        const tool = body.params?.name;
+        calls.push(tool);
+        if (tool === "upsert_skill") {
+          return new Response(JSON.stringify(mockJsonRpcResponse("ok")), { status: 200 });
+        }
+        // list_skills for the final snapshot
+        return new Response(
+          JSON.stringify(mockJsonRpcResponse(JSON.stringify([{ name: "paperclip-inbox", description: "Inbox" }]))),
+          { status: 200 },
+        );
+      });
+
+      const adapter = createServerAdapter();
+      const result = await adapter.syncSkills!(
+        {
+          agentId: "agent-1",
+          companyId: "co-1",
+          adapterType: "errand",
+          config: {
+            adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
+            paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", content: "Check inbox" }],
+          },
+        },
+        ["paperclip/inbox"],
+      );
+
+      expect(calls).toContain("upsert_skill");
+      expect(calls).toContain("list_skills");
+      expect(result.supported).toBe(true);
+      expect(result.entries.some((e) => e.key === "paperclip/inbox" && e.state === "installed")).toBe(true);
+    });
+  });
+
+  describe("execute env injection", () => {
+    it("passes Paperclip env vars via env parameter on newTask", async () => {
+      const taskId = "task-env-test";
+      let newTaskArgs: Record<string, unknown> | null = null;
+
+      fetchMock.mockImplementation(async (url: string, opts: { body: string }) => {
+        if (typeof url === "string" && url.includes("/logs/stream")) {
+          return new Response("", { status: 200 });
+        }
+        const body = JSON.parse(opts.body);
+        const tool = body.params?.name;
+        if (tool === "new_task") {
+          newTaskArgs = body.params.arguments;
+          return new Response(JSON.stringify(mockJsonRpcResponse(taskId)), { status: 200 });
+        }
+        // task_status: completed
+        if (tool === "task_status") {
+          return new Response(
+            JSON.stringify(mockJsonRpcResponse(JSON.stringify({ id: taskId, status: "completed" }))),
+            { status: 200 },
+          );
+        }
+        // task_output / task_logs
+        return new Response(JSON.stringify(mockJsonRpcResponse("done")), { status: 200 });
+      });
+
+      const adapter = createServerAdapter();
+      const ctx = makeExecutionContext({ authToken: "jwt-token-123" });
+      await adapter.execute(ctx);
+
+      expect(newTaskArgs).toBeDefined();
+      const env = (newTaskArgs as Record<string, unknown>).env as Record<string, string>;
+      expect(env.PAPERCLIP_API_KEY).toBe("jwt-token-123");
+      expect(env.PAPERCLIP_AGENT_ID).toBe("agent-1");
+      expect(env.PAPERCLIP_COMPANY_ID).toBe("co-1");
+      expect(env.PAPERCLIP_RUN_ID).toBe("run-1");
+      expect(env.PAPERCLIP_API_URL).toBeDefined();
+    });
+  });
 });

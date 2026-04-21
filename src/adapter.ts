@@ -6,6 +6,9 @@ import type {
   AdapterEnvironmentTestResult,
   AdapterModel,
   AdapterConfigSchema,
+  AdapterSkillContext,
+  AdapterSkillSnapshot,
+  AdapterSkillEntry,
 } from "@paperclipai/adapter-utils";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { readFile } from "node:fs/promises";
@@ -223,10 +226,22 @@ async function execute(
     });
   }
 
+  // Build environment variables for the errand task-runner container
+  const taskEnv: Record<string, string> = {
+    PAPERCLIP_AGENT_ID: ctx.agent.id,
+    PAPERCLIP_COMPANY_ID: ctx.agent.companyId,
+    PAPERCLIP_RUN_ID: ctx.runId,
+  };
+  if (ctx.authToken) {
+    taskEnv.PAPERCLIP_API_KEY = ctx.authToken;
+  }
+  const paperclipApiUrl = process.env.PAPERCLIP_API_URL ?? `http://localhost:3100`;
+  taskEnv.PAPERCLIP_API_URL = paperclipApiUrl;
+
   let taskId: string;
   try {
     const taskTitle = `${ctx.agent.name}-${ctx.runId}`;
-    taskId = await client.newTask(prompt, config.model, taskTitle);
+    taskId = await client.newTask(prompt, config.model, taskTitle, taskEnv);
   } catch (err) {
     return {
       exitCode: 1,
@@ -425,6 +440,126 @@ export const agentConfigurationDoc = `## Errand Adapter Configuration
 The model dropdown lists errand task profiles. Each profile bundles a model, system prompt, max turns, and tool configuration. Select the profile that matches your use case.
 `;
 
+interface RuntimeSkillEntry {
+  key: string;
+  runtimeName: string | null;
+  content?: string;
+  files?: Array<{ path: string; content: string }>;
+}
+
+async function listSkills(
+  ctx: AdapterSkillContext,
+  getClient: (url: string, apiKey: string) => ErrandClient,
+): Promise<AdapterSkillSnapshot> {
+  const config = ctx.config as Record<string, unknown>;
+  const schemaValues = config.adapterSchemaValues as Record<string, unknown> | undefined;
+  const url = ((schemaValues?.url ?? config.url) as string ?? "").replace(/\/+$/, "");
+  const apiKey = (schemaValues?.apiKey ?? config.apiKey) as string;
+
+  if (!url || !apiKey) {
+    return { adapterType: "errand", supported: true, mode: "persistent", desiredSkills: [], entries: [], warnings: ["URL or API key not configured"] };
+  }
+
+  const client = getClient(url, apiKey);
+  const paperclipSkills = (config.paperclipRuntimeSkills ?? []) as RuntimeSkillEntry[];
+  const desiredSkills = paperclipSkills.map((s) => s.key);
+
+  try {
+    const errandSkills = await client.listSkills();
+    const errandSkillsByName = new Map(errandSkills.map((s) => [s.name, s]));
+
+    const entries: AdapterSkillEntry[] = paperclipSkills.map((ps) => {
+      const runtimeName = ps.runtimeName ?? ps.key;
+      const installed = errandSkillsByName.has(runtimeName);
+      return {
+        key: ps.key,
+        runtimeName,
+        desired: true,
+        managed: true,
+        state: installed ? "installed" : "missing",
+        origin: "company_managed",
+      };
+    });
+
+    // Include errand-side skills not managed by Paperclip
+    for (const [name, skill] of errandSkillsByName) {
+      if (!entries.some((e) => e.runtimeName === name)) {
+        entries.push({
+          key: name,
+          runtimeName: name,
+          desired: false,
+          managed: false,
+          state: "external",
+          origin: "external_unknown",
+          detail: skill.description,
+        });
+      }
+    }
+
+    return { adapterType: "errand", supported: true, mode: "persistent", desiredSkills, entries, warnings: [] };
+  } catch (err) {
+    return { adapterType: "errand", supported: true, mode: "persistent", desiredSkills, entries: [], warnings: [`Failed to list skills: ${err instanceof Error ? err.message : String(err)}`] };
+  }
+}
+
+async function syncSkills(
+  ctx: AdapterSkillContext,
+  desiredSkills: string[],
+  getClient: (url: string, apiKey: string) => ErrandClient,
+): Promise<AdapterSkillSnapshot> {
+  const config = ctx.config as Record<string, unknown>;
+  const schemaValues = config.adapterSchemaValues as Record<string, unknown> | undefined;
+  const url = ((schemaValues?.url ?? config.url) as string ?? "").replace(/\/+$/, "");
+  const apiKey = (schemaValues?.apiKey ?? config.apiKey) as string;
+
+  if (!url || !apiKey) {
+    return { adapterType: "errand", supported: true, mode: "persistent", desiredSkills, entries: [], warnings: ["URL or API key not configured"] };
+  }
+
+  const client = getClient(url, apiKey);
+  const paperclipSkills = (config.paperclipRuntimeSkills ?? []) as RuntimeSkillEntry[];
+  const desiredSet = new Set(desiredSkills);
+  const warnings: string[] = [];
+
+  try {
+    const errandSkills = await client.listSkills();
+    const errandSkillNames = new Set(errandSkills.map((s) => s.name));
+
+    // Upsert desired skills
+    for (const ps of paperclipSkills) {
+      if (!desiredSet.has(ps.key)) continue;
+      const runtimeName = ps.runtimeName ?? ps.key;
+      try {
+        await client.upsertSkill(
+          runtimeName,
+          `Paperclip skill: ${ps.key}`,
+          ps.content ?? "",
+          ps.files,
+        );
+      } catch (err) {
+        warnings.push(`Failed to sync skill "${ps.key}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // Delete Paperclip-managed skills that are no longer desired
+    for (const ps of paperclipSkills) {
+      if (desiredSet.has(ps.key)) continue;
+      const runtimeName = ps.runtimeName ?? ps.key;
+      if (!errandSkillNames.has(runtimeName)) continue;
+      try {
+        await client.deleteSkill(runtimeName);
+      } catch {
+        // Skill may already be deleted
+      }
+    }
+  } catch (err) {
+    warnings.push(`Skill sync failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Return fresh snapshot
+  return listSkills(ctx, getClient);
+}
+
 export function createServerAdapter(): ServerAdapterModule {
   let cachedClient: ErrandClient | null = null;
   let cachedUrl = "";
@@ -449,6 +584,9 @@ export function createServerAdapter(): ServerAdapterModule {
     supportsLocalAgentJwt: true,
     supportsInstructionsBundle: true,
     instructionsPathKey: "instructionsFilePath",
+
+    listSkills: (ctx: AdapterSkillContext) => listSkills(ctx, getClient),
+    syncSkills: (ctx: AdapterSkillContext, desiredSkills: string[]) => syncSkills(ctx, desiredSkills, getClient),
 
     async listModels(): Promise<AdapterModel[]> {
       if (!cachedClient) return [];
