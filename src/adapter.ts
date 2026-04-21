@@ -35,9 +35,20 @@ function extractConfig(ctx: AdapterExecutionContext): AdapterConfig {
 }
 
 function buildPrompt(ctx: AdapterExecutionContext): string {
+  const config = ctx.config as Record<string, unknown>;
   const context = ctx.context as Record<string, unknown>;
+
+  // Build wake prompt from Paperclip wake payload (issue, comments, etc.)
   const wakePrompt = renderPaperclipWakePrompt(context.paperclipWake);
-  return wakePrompt || "Begin your work cycle.";
+
+  // Use promptTemplate from config as base prompt (set by Paperclip UI)
+  const promptTemplate = (config.promptTemplate as string) ?? "";
+  const renderedTemplate = promptTemplate
+    .replace(/\{\{agent\.id\}\}/g, ctx.agent.id)
+    .replace(/\{\{agent\.name\}\}/g, ctx.agent.name);
+
+  const sections = [renderedTemplate, wakePrompt].filter(Boolean);
+  return sections.join("\n\n") || "Begin your work cycle.";
 }
 
 async function streamLogs(

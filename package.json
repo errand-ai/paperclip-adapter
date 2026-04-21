@@ -1,6 +1,6 @@
 {
   "name": "@errand-ai/paperclip-adapter",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "type": "module",
   "description": "Paperclip adapter for errand task execution engine",
   "exports": {
