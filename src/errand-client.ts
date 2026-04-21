@@ -64,6 +64,7 @@ export class ErrandClient {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
         Authorization: `Bearer ${this.apiKey}`,
+        "X-Client-Id": "paperclip",
       },
       body: JSON.stringify(request),
     });
