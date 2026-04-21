@@ -11,7 +11,8 @@ import type {
   AdapterSkillEntry,
 } from "@paperclipai/adapter-utils";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
+import path from "node:path";
 import { ErrandClient } from "./errand-client.js";
 
 const TERMINAL_STATES = new Set(["completed", "review", "deleted", "failed"]);
@@ -217,13 +218,17 @@ async function execute(
 
   // Report invocation metadata for the Paperclip run log
   if (ctx.onMeta) {
-    await ctx.onMeta({
-      adapterType: "errand",
-      command: `${config.url}/mcp/`,
-      commandArgs: ["new_task", ...(config.model ? [`profile=${config.model}`] : [])],
-      prompt,
-      context: ctx.context as Record<string, unknown>,
-    });
+    try {
+      await ctx.onMeta({
+        adapterType: "errand",
+        command: `${config.url}/mcp/`,
+        commandArgs: ["new_task", ...(config.model ? [`profile=${config.model}`] : [])],
+        prompt,
+        context: ctx.context as Record<string, unknown>,
+      });
+    } catch {
+      // Non-fatal — metadata is informational
+    }
   }
 
   // Build environment variables for the errand task-runner container
@@ -241,7 +246,13 @@ async function execute(
   let taskId: string;
   try {
     const taskTitle = `${ctx.agent.name}-${ctx.runId}`;
-    taskId = await client.newTask(prompt, config.model, taskTitle, taskEnv);
+    try {
+      // Try with env parameter (requires errand paperclip-integration-api changes)
+      taskId = await client.newTask(prompt, config.model, taskTitle, taskEnv);
+    } catch {
+      // Fall back without env if errand doesn't support it yet
+      taskId = await client.newTask(prompt, config.model, taskTitle);
+    }
   } catch (err) {
     return {
       exitCode: 1,
@@ -442,9 +453,66 @@ The model dropdown lists errand task profiles. Each profile bundles a model, sys
 
 interface RuntimeSkillEntry {
   key: string;
-  runtimeName: string | null;
-  content?: string;
-  files?: Array<{ path: string; content: string }>;
+  runtimeName: string;
+  source: string; // filesystem path to skill directory
+  required?: boolean;
+  requiredReason?: string | null;
+}
+
+interface SkillContent {
+  description: string;
+  instructions: string;
+  files: Array<{ path: string; content: string }>;
+}
+
+async function readSkillFromDisk(sourceDir: string): Promise<SkillContent | null> {
+  try {
+    const skillMdPath = path.join(sourceDir, "SKILL.md");
+    const raw = await readFile(skillMdPath, "utf-8");
+
+    // Parse frontmatter for description
+    let description = "";
+    let instructions = raw;
+    const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (frontmatterMatch) {
+      const fm = frontmatterMatch[1];
+      instructions = frontmatterMatch[2].trim();
+      const descMatch = fm.match(/description:\s*>?\s*\n?([\s\S]*?)(?:\n\w|$)/);
+      if (descMatch) {
+        description = descMatch[1].replace(/\n\s*/g, " ").trim();
+      }
+    }
+
+    // Read additional files (references, etc.)
+    const files: Array<{ path: string; content: string }> = [];
+    async function walkDir(dir: string, prefix: string): Promise<void> {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          await walkDir(fullPath, relativePath);
+        } else if (entry.name !== "SKILL.md") {
+          try {
+            const content = await readFile(fullPath, "utf-8");
+            files.push({ path: relativePath, content });
+          } catch {
+            // Skip unreadable files
+          }
+        }
+      }
+    }
+    await walkDir(sourceDir, "");
+
+    return { description, instructions, files };
+  } catch {
+    return null;
+  }
 }
 
 async function listSkills(
@@ -525,16 +593,21 @@ async function syncSkills(
     const errandSkills = await client.listSkills();
     const errandSkillNames = new Set(errandSkills.map((s) => s.name));
 
-    // Upsert desired skills
+    // Upsert desired skills — read content from disk
     for (const ps of paperclipSkills) {
       if (!desiredSet.has(ps.key)) continue;
       const runtimeName = ps.runtimeName ?? ps.key;
       try {
+        const skillContent = await readSkillFromDisk(ps.source);
+        if (!skillContent) {
+          warnings.push(`Skill "${ps.key}": could not read from ${ps.source}`);
+          continue;
+        }
         await client.upsertSkill(
           runtimeName,
-          `Paperclip skill: ${ps.key}`,
-          ps.content ?? "",
-          ps.files,
+          skillContent.description || `Paperclip skill: ${ps.key}`,
+          skillContent.instructions,
+          skillContent.files.length > 0 ? skillContent.files : undefined,
         );
       } catch (err) {
         warnings.push(`Failed to sync skill "${ps.key}": ${err instanceof Error ? err.message : String(err)}`);

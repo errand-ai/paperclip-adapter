@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
+import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createServerAdapter } from "./adapter.js";
 import type {
   AdapterExecutionContext,
@@ -334,7 +337,7 @@ describe("Adapter Module", () => {
         adapterType: "errand",
         config: {
           adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
-          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox" }],
+          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", source: "/tmp/skills/inbox" }],
         },
       });
 
@@ -357,7 +360,7 @@ describe("Adapter Module", () => {
         adapterType: "errand",
         config: {
           adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
-          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox" }],
+          paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", source: "/tmp/skills/inbox" }],
         },
       });
 
@@ -366,13 +369,30 @@ describe("Adapter Module", () => {
   });
 
   describe("syncSkills", () => {
-    it("upserts desired skills and returns updated snapshot", async () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+      tmpDir = await mkdtemp(path.join(tmpdir(), "errand-skill-test-"));
+      // Create a skill directory with SKILL.md and a reference file
+      const skillDir = path.join(tmpDir, "paperclip-inbox");
+      await mkdir(path.join(skillDir, "references"), { recursive: true });
+      await writeFile(path.join(skillDir, "SKILL.md"), "---\nname: inbox\ndescription: >\n  Check your inbox\n---\n\n# Inbox Skill\n\nCheck your Paperclip inbox.");
+      await writeFile(path.join(skillDir, "references", "api.md"), "# API Reference\n\nGET /api/inbox");
+    });
+
+    afterEach(async () => {
+      await rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it("upserts desired skills with content from disk and returns updated snapshot", async () => {
       const calls: string[] = [];
+      let upsertArgs: Record<string, unknown> | null = null;
       fetchMock.mockImplementation(async (_url: string, opts: { body: string }) => {
         const body = JSON.parse(opts.body);
         const tool = body.params?.name;
         calls.push(tool);
         if (tool === "upsert_skill") {
+          upsertArgs = body.params.arguments;
           return new Response(JSON.stringify(mockJsonRpcResponse("ok")), { status: 200 });
         }
         // list_skills for the final snapshot
@@ -390,7 +410,11 @@ describe("Adapter Module", () => {
           adapterType: "errand",
           config: {
             adapterSchemaValues: { url: "https://errand.test", apiKey: "key" },
-            paperclipRuntimeSkills: [{ key: "paperclip/inbox", runtimeName: "paperclip-inbox", content: "Check inbox" }],
+            paperclipRuntimeSkills: [{
+              key: "paperclip/inbox",
+              runtimeName: "paperclip-inbox",
+              source: path.join(tmpDir, "paperclip-inbox"),
+            }],
           },
         },
         ["paperclip/inbox"],
@@ -400,6 +424,16 @@ describe("Adapter Module", () => {
       expect(calls).toContain("list_skills");
       expect(result.supported).toBe(true);
       expect(result.entries.some((e) => e.key === "paperclip/inbox" && e.state === "installed")).toBe(true);
+
+      // Verify skill content was read from disk
+      expect(upsertArgs).toBeDefined();
+      expect((upsertArgs as Record<string, unknown>).name).toBe("paperclip-inbox");
+      expect((upsertArgs as Record<string, unknown>).instructions).toContain("Inbox Skill");
+      expect((upsertArgs as Record<string, unknown>).description).toContain("Check your inbox");
+      const files = (upsertArgs as Record<string, unknown>).files as Array<{ path: string; content: string }>;
+      expect(files).toHaveLength(1);
+      expect(files[0].path).toBe("references/api.md");
+      expect(files[0].content).toContain("API Reference");
     });
   });
 
