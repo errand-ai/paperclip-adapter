@@ -10,7 +10,7 @@ import type {
   AdapterSkillSnapshot,
   AdapterSkillEntry,
 } from "@paperclipai/adapter-utils";
-import { renderPaperclipWakePrompt, resolvePaperclipDesiredSkillNames } from "@paperclipai/adapter-utils/server-utils";
+import { renderPaperclipWakePrompt, normalizePaperclipWakePayload, resolvePaperclipDesiredSkillNames } from "@paperclipai/adapter-utils/server-utils";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { ErrandClient } from "./errand-client.js";
@@ -78,6 +78,23 @@ async function buildPrompt(
   }
 
   return sections.join("\n\n") || "Begin your work cycle.";
+}
+
+/**
+ * Derive a human-friendly task title from Paperclip context.
+ * Priority: issue identifier → runtime taskKey → wake reason → runId.
+ */
+export function buildTaskTitle(ctx: AdapterExecutionContext): string {
+  const context = ctx.context as Record<string, unknown>;
+  const wake = normalizePaperclipWakePayload(context.paperclipWake);
+
+  const suffix =
+    wake?.issue?.identifier?.trim() ||
+    ctx.runtime.taskKey?.trim() ||
+    wake?.reason?.trim() ||
+    ctx.runId;
+
+  return `${ctx.agent.name}-${suffix}`;
 }
 
 function parseAndForwardEvent(
@@ -246,7 +263,7 @@ async function execute(
 
   let taskId: string;
   try {
-    const taskTitle = `${ctx.agent.name}-${ctx.runId}`;
+    const taskTitle = buildTaskTitle(ctx);
     try {
       // Try with env parameter (requires errand paperclip-integration-api changes)
       taskId = await client.newTask(prompt, config.model, taskTitle, taskEnv);

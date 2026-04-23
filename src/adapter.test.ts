@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createServerAdapter } from "./adapter.js";
+import { createServerAdapter, buildTaskTitle } from "./adapter.js";
 import type {
   AdapterExecutionContext,
   AdapterEnvironmentTestContext,
@@ -498,6 +498,43 @@ describe("Adapter Module", () => {
       expect(env.PAPERCLIP_COMPANY_ID).toBe("co-1");
       expect(env.PAPERCLIP_RUN_ID).toBe("run-1");
       expect(env.PAPERCLIP_API_URL).toBeDefined();
+    });
+  });
+
+  describe("buildTaskTitle", () => {
+    it("uses issue identifier when wake payload contains an issue", () => {
+      const ctx = makeExecutionContext({
+        context: {
+          paperclipWake: {
+            reason: "comment",
+            issue: { id: "issue-uuid", identifier: "ERR-2", title: "Fix login" },
+            comments: [],
+          },
+        },
+      });
+      expect(buildTaskTitle(ctx)).toBe("test-agent-ERR-2");
+    });
+
+    it("uses runtime.taskKey when set but no issue", () => {
+      const ctx = makeExecutionContext({
+        runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: "heartbeat" },
+        context: { paperclipWake: { reason: "schedule" } },
+      });
+      expect(buildTaskTitle(ctx)).toBe("test-agent-heartbeat");
+    });
+
+    it("uses wake reason when no issue or taskKey", () => {
+      const ctx = makeExecutionContext({
+        context: { paperclipWake: { reason: "comment", commentIds: ["cmt-1"] } },
+      });
+      expect(buildTaskTitle(ctx)).toBe("test-agent-comment");
+    });
+
+    it("falls back to runId when no contextual data", () => {
+      const ctx = makeExecutionContext({
+        context: {},
+      });
+      expect(buildTaskTitle(ctx)).toBe("test-agent-run-1");
     });
   });
 });

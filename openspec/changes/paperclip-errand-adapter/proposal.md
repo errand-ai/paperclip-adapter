@@ -24,6 +24,8 @@ Paperclip is an agent workforce orchestrator that delegates tasks to adapter-bac
 
 ### Modified Capabilities
 
+- `adapter-execute`: Derive human-friendly errand task titles from Paperclip wake context (issue identifier, task key, wake reason) instead of opaque run UUIDs, for easier identification on the errand dashboard
+
 ## Impact
 
 - New npm package: `@errand-ai/paperclip-adapter`

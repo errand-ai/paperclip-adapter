@@ -7,7 +7,13 @@ The adapter SHALL create errand tasks by calling the `new_task` MCP tool with th
 - **WHEN** `execute()` is called with a valid execution context
 - **THEN** the adapter SHALL call errand's `new_task` MCP tool with the prompt derived from the Paperclip context
 - **THEN** the adapter SHALL pass the selected profile name from `adapterConfig.model` to the `profile` parameter
-- **THEN** the adapter SHALL pass a `title` parameter in the format `{agent.name}-{runId}` to bypass errand's task summariser and provide a meaningful link back to the Paperclip run
+- **THEN** the adapter SHALL pass a `title` parameter derived from available Paperclip context to bypass errand's task summariser and provide a human-readable label on the errand dashboard
+- **THEN** the title suffix SHALL be resolved using the following priority chain (first non-empty value wins):
+  1. `context.paperclipWake.issue.identifier` (e.g. `"ERR-2"` → title `"CEO-ERR-2"`)
+  2. `ctx.runtime.taskKey` (e.g. `"heartbeat"` → title `"CEO-Heartbeat"`)
+  3. The `reason` field from `context.paperclipWake` (e.g. `"comment"` → title `"CEO-comment"`)
+  4. `ctx.runId` as a final fallback (e.g. `"CEO-run-abc123..."`)
+- **THEN** the title format SHALL be `{agent.name}-{suffix}` where `suffix` is the first resolved value from the chain above
 - **THEN** the adapter SHALL receive a task UUID from errand
 
 #### Scenario: Task creation failure

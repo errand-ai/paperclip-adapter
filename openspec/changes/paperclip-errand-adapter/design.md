@@ -100,6 +100,19 @@ The adapter is installed via Paperclip's adapter plugin system (`POST /api/adapt
 
 **Rationale:** Adapters are execution backends, not plugins. The adapter plugin system is the correct integration point. The package also includes a plugin manifest and worker for compatibility, but the primary entry is the adapter plugin store.
 
+### 12. Human-friendly task titles from wake context
+
+The task title passed to errand's `new_task` is derived from Paperclip context using a priority chain rather than the opaque `runId`:
+
+1. `context.paperclipWake.issue.identifier` — the Paperclip issue ID (e.g. `"ERR-2"`)
+2. `ctx.runtime.taskKey` — harness-assigned task key (e.g. `"heartbeat"`)
+3. `context.paperclipWake.reason` — wake reason string (e.g. `"comment"`)
+4. `ctx.runId` — fallback UUID
+
+The title format is `{agent.name}-{suffix}`, producing titles like `CEO-ERR-2`, `CEO-Heartbeat`, or `CEO-comment` instead of `CEO-run-abc123...`.
+
+**Rationale:** Errand's dashboard lists tasks by title. UUIDs are unreadable and make it hard to correlate tasks with Paperclip issues or wake reasons. The priority chain uses the most specific identifier available, with the existing `runId` as a safe fallback when no richer context exists. The `normalizePaperclipWakePayload()` utility from adapter-utils is used to safely extract wake fields.
+
 ## Risks / Trade-offs
 
 - **MCP protocol coupling** — Direct JSON-RPC calls are coupled to errand's MCP tool signatures. Mitigation: errand's MCP API is stable.

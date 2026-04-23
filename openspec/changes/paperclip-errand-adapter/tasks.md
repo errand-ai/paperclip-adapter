@@ -70,3 +70,12 @@
 - [x] 7.9 Test `listSkills()` maps errand skills to AdapterSkillSnapshot
 - [x] 7.10 Test `syncSkills()` diffs and syncs skills correctly
 - [x] 7.11 Test `execute()` passes Paperclip env vars via `env` parameter
+
+## 8. Human-Friendly Task Titles
+
+- [x] 8.1 Extract `buildTaskTitle(ctx)` helper that resolves title suffix from wake context priority chain: `issue.identifier` → `runtime.taskKey` → `wake.reason` → `runId`, using `normalizePaperclipWakePayload()` for safe field access
+- [x] 8.2 Update `execute()` to call `buildTaskTitle(ctx)` instead of inline `${ctx.agent.name}-${ctx.runId}`
+- [x] 8.3 Test title resolves to `{agent.name}-{issue.identifier}` when wake payload contains an issue
+- [x] 8.4 Test title resolves to `{agent.name}-{taskKey}` when runtime.taskKey is set but no issue
+- [x] 8.5 Test title resolves to `{agent.name}-{reason}` when wake reason is present but no issue or taskKey
+- [x] 8.6 Test title falls back to `{agent.name}-{runId}` when no contextual data is available
