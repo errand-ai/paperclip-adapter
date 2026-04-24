@@ -499,6 +499,51 @@ describe("Adapter Module", () => {
       expect(env.PAPERCLIP_RUN_ID).toBe("run-1");
       expect(env.PAPERCLIP_API_URL).toBeDefined();
     });
+
+    it("passes user-configured env vars from config.env to errand task", async () => {
+      const taskId = "task-env-user";
+      let newTaskArgs: Record<string, unknown> | null = null;
+
+      fetchMock.mockImplementation(async (url: string, opts: { body: string }) => {
+        if (typeof url === "string" && url.includes("/logs/stream")) {
+          return new Response("", { status: 200 });
+        }
+        const body = JSON.parse(opts.body);
+        const tool = body.params?.name;
+        if (tool === "new_task") {
+          newTaskArgs = body.params.arguments;
+          return new Response(JSON.stringify(mockJsonRpcResponse(taskId)), { status: 200 });
+        }
+        if (tool === "task_status") {
+          return new Response(
+            JSON.stringify(mockJsonRpcResponse(JSON.stringify({ id: taskId, status: "completed" }))),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify(mockJsonRpcResponse("done")), { status: 200 });
+      });
+
+      const adapter = createServerAdapter();
+      const ctx = makeExecutionContext({
+        authToken: "jwt-token-123",
+        config: {
+          adapterSchemaValues: { url: "https://errand.test", apiKey: "test-key", timeoutSec: 5 },
+          model: "default-profile",
+          pollIntervalMs: 50,
+          env: { GOOGLE_API_KEY: "user-api-key-123", CUSTOM_VAR: "custom-value" },
+        },
+      });
+      await adapter.execute(ctx);
+
+      expect(newTaskArgs).toBeDefined();
+      const env = (newTaskArgs as Record<string, unknown>).env as Record<string, string>;
+      // User-configured vars are passed through
+      expect(env.GOOGLE_API_KEY).toBe("user-api-key-123");
+      expect(env.CUSTOM_VAR).toBe("custom-value");
+      // System vars still present and not overridden
+      expect(env.PAPERCLIP_API_KEY).toBe("jwt-token-123");
+      expect(env.PAPERCLIP_AGENT_ID).toBe("agent-1");
+    });
   });
 
   describe("buildTaskTitle", () => {

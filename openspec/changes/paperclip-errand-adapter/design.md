@@ -113,6 +113,12 @@ The title format is `{agent.name}-{suffix}`, producing titles like `CEO-ERR-2`, 
 
 **Rationale:** Errand's dashboard lists tasks by title. UUIDs are unreadable and make it hard to correlate tasks with Paperclip issues or wake reasons. The priority chain uses the most specific identifier available, with the existing `runId` as a safe fallback when no richer context exists. The `normalizePaperclipWakePayload()` utility from adapter-utils is used to safely extract wake fields.
 
+### 13. Forward user-configured env vars from agent config
+
+User-configured environment variables (added via Paperclip's agent UI) arrive at execution time on `ctx.config.env` as a `Record<string, string>` with secret references already resolved by Paperclip's `resolveAdapterConfigForRuntime()`. The adapter spreads these into `taskEnv` before overlaying the Paperclip system variables.
+
+**Rationale:** Errand tasks run in isolated containers with no access to the host environment. Any API keys or custom configuration the agent needs (e.g. `GOOGLE_API_KEY`) must be explicitly passed via the `env` parameter on `new_task`. Spreading user vars first and then overlaying system vars ensures `PAPERCLIP_*` keys cannot be accidentally overridden by user configuration.
+
 ## Risks / Trade-offs
 
 - **MCP protocol coupling** — Direct JSON-RPC calls are coupled to errand's MCP tool signatures. Mitigation: errand's MCP API is stable.

@@ -79,3 +79,8 @@
 - [x] 8.4 Test title resolves to `{agent.name}-{taskKey}` when runtime.taskKey is set but no issue
 - [x] 8.5 Test title resolves to `{agent.name}-{reason}` when wake reason is present but no issue or taskKey
 - [x] 8.6 Test title falls back to `{agent.name}-{runId}` when no contextual data is available
+
+## 9. User-Configured Environment Variables
+
+- [x] 9.1 Update `execute()` to merge `ctx.config.env` (user-configured env vars) into `taskEnv`, with Paperclip system vars overlaying so they cannot be overridden
+- [x] 9.2 Test user-configured env vars from `config.env` are passed through to errand's `new_task` env parameter alongside Paperclip system vars

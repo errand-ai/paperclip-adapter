@@ -233,8 +233,12 @@ async function execute(
   const client = getClient(config.url, config.apiKey);
   const prompt = await buildPrompt(ctx, ctx.onLog);
 
-  // Build environment variables for the errand task-runner container
+  // Build environment variables for the errand task-runner container.
+  // Start with user-configured env vars from the agent config, then overlay
+  // Paperclip system vars so they cannot be accidentally overridden.
+  const userEnv = (ctx.config as Record<string, unknown>).env as Record<string, string> | undefined;
   const taskEnv: Record<string, string> = {
+    ...(userEnv ?? {}),
     PAPERCLIP_AGENT_ID: ctx.agent.id,
     PAPERCLIP_COMPANY_ID: ctx.agent.companyId,
     PAPERCLIP_RUN_ID: ctx.runId,

@@ -121,6 +121,19 @@ The adapter SHALL pass Paperclip runtime credentials to errand's task-runner con
   - `PAPERCLIP_COMPANY_ID`: `ctx.agent.companyId`
   - `PAPERCLIP_RUN_ID`: `ctx.runId`
 
+### Requirement: User-configured environment variables
+The adapter SHALL forward user-configured environment variables from the Paperclip agent UI to the errand task-runner container.
+
+#### Scenario: User env vars passed to errand task
+- **WHEN** `execute()` creates a new errand task
+- **AND** the agent configuration contains user-configured environment variables in `ctx.config.env`
+- **THEN** the adapter SHALL include all entries from `ctx.config.env` in the `env` parameter passed to `new_task`
+- **THEN** Paperclip system variables (`PAPERCLIP_API_KEY`, `PAPERCLIP_API_URL`, `PAPERCLIP_AGENT_ID`, `PAPERCLIP_COMPANY_ID`, `PAPERCLIP_RUN_ID`) SHALL overlay user variables so they cannot be accidentally overridden
+
+#### Scenario: No user env vars configured
+- **WHEN** `ctx.config.env` is absent or empty
+- **THEN** the adapter SHALL pass only the Paperclip system variables (existing behaviour)
+
 ### Requirement: MCP communication via Streamable HTTP
 The adapter SHALL communicate with errand's MCP endpoint using the MCP Streamable HTTP transport.
 
